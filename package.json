@@ -3,7 +3,7 @@
   "version": "1.3.0",
   "displayName": "MicrobialNet Story",
   "description": "剧情/流程编辑与运行时工具包：编辑器可视化搭建剧情图，运行时播放，并提供事件/变量/本地化/角色/存档接缝与 StoryFlow 控制组件。",
-  "documentationUrl": "./Documentation~/manual/html/index.html",
+  "documentationUrl": "https://chuennam.github.io/MicrobialNet-Story/manual/html/",
   "unity": "2022.3",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1",
