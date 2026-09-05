@@ -20,11 +20,24 @@
 
 ## 相关文档
 
-- [MicrobialNet Story 使用文档](https://chuennam.github.io/MicrobialNet-Story/manual/html/) —— MicrobialNet Story 的基础使用方法与操作演示
-- [MicrobialNet Story 组件 API 参考](https://chuennam.github.io/MicrobialNet-Story/component-api-reference/html/) —— 每个宿主可见类：元信息 / 属性 / 方法签名 / 事件 / 生命周期消息 / 完整示例，按类定位。
-- [MicrobialNet Story 系统接口使用指南](https://chuennam.github.io/MicrobialNet-Story/system-api-guide/html/) —— 全部可接入的接缝接口（变量 / 事件 / 文本 / 角色 / 存档 / 多图 / 表现层）说明与完整装配示例。
+- [使用文档](https://chuennam.github.io/MicrobialNet-Story/manual/html/)  
+MicrobialNet Story 的基础使用方法与操作演示 **（推荐优先阅读）**
 
-> **更多文档信息在 `Documentation` 中提供**
+- [组件 API 参考](https://chuennam.github.io/MicrobialNet-Story/component-api-reference/html/)  
+每个宿主可见类：元信息 / 属性 / 方法签名 / 事件 / 生命周期消息 / 完整示例，按类定位。
+
+- [系统接口使用指南](https://chuennam.github.io/MicrobialNet-Story/system-api-guide/html/)  
+全部可接入的接缝接口（变量 / 事件 / 文本 / 角色 / 存档 / 多图 / 表现层）说明与完整装配示例。
+
+- [剧情表编写规则](https://chuennam.github.io/MicrobialNet-Story/story-table-rules/html/)  
+剧本表格的书写格式规则。具体说明表的列结构、行类型与跳转规则
+
+- [事件节点使用指南](https://chuennam.github.io/MicrobialNet-Story/event-node-guide/html/)  
+通过使用事件节点与自定义事件，更好的搭建剧情与游戏流程
+
+- [对话框生成策略使用指南](https://chuennam.github.io/MicrobialNet-Story/dialogue-box-spawn-guide/html/)  
+面向开发者实现自定义对话框出现效果的接口手册与参考案例
+
 
 ## 接缝接口一览
 
