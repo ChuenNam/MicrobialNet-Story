@@ -1,0 +1,14 @@
+/* InspectorRow.uss — 属性面板通用行（02 §4.1 / §4.2） */
+
+.inspector-row {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.inspector-label {
+    flex-shrink: 0;
+    margin-right: 6px;
+    padding-top: 2px;
+}
+
+.inspector-field { flex-grow: 1; min-width: 0; }

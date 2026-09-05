@@ -1,0 +1,23 @@
+{
+    "name": "MicrobialNet.Story.AddressablesAdapter.Editor",
+    "rootNamespace": "MicrobialNet.Story.EditorTools",
+    "references": [
+        "MicrobialNet.Story.AddressablesAdapter",
+        "com.microbialnet.story",
+        "com.microbialnet.story.Settings",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

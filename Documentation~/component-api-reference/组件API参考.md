@@ -1,0 +1,1026 @@
+# 组件 API 参考（业务侧）
+
+> 本参考面向**剧情系统宿主（业务侧 / Assembly-CSharp）**，覆盖其可直接使用的全部公共 API。
+> 文档按**组件页**组织：一个可供业务使用的类即为一个组件页，页内依次给出
+> `class in / Inherits from / Implemented in` 元信息 → `Description` → `Properties`（属性表）→
+> `Public Methods`（方法表，含完整签名）→ `Messages`（生命周期消息）→ 示例代码。
+>
+> 配套文档《系统接口使用指南》按**功能模块**（变量 / 事件 / 角色 / 存档…）横向归类接口；
+> 本文档按**组件**纵向展开——按需定位到类，即可在对应组件页一次看全其属性、方法、事件与示例。
+> 内容遵循「能直接使用的函数 / 字段才列出，拿不到的不写」：凡 `internal` 类型与成员一律不出现。
+
+---
+
+## 组件总览 {.overview}
+
+### 程序集与命名空间
+
+| 程序集（asmdef） | 命名空间 | 内容 | 宿主是否引用 |
+|---|---|---|---|
+| `com.microbialnet.story` | `MicrobialNet.Story` | 门面组件、图注册组件、全部服务类、契约接口、数据资产 | **必引用** |
+| `com.microbialnet.story.TMP` | `MicrobialNet.Story` | TMP 表现层：`StoryView` 与三个对话框盒子视图（可选） | 用 TMP 表现层时引用 |
+| `com.microbialnet.story.UI` | `MicrobialNet.Story.UI` | 对话框管理器 / 盒子生命周期 / 生成策略（被 TMP 层引用） | 一般不需要直接引用 |
+
+> 宿主（`Assembly-CSharp`）**看不见** `internal` 类型。本包经 `InternalsVisibleTo` 只对同包
+> `Editor / TMP / Tests` 程序集开放内部实现（`StoryPlayer`、`RuntimeStoryGraph`、`TypingScheduler`、
+> `ConditionEvaluator`、`ValueParser`、`StoryMeta` 等），宿主一律经 `StoryFlow` 门面间接使用。
+> 因此本文档**不含**上述内部类型。
+
+### 组件一览
+
+| 组件（类） | 形态 | 一句话职责 |
+|---|---|---|
+| `StoryFlow` | MonoBehaviour | 剧情系统门面与控制组件：装配、播放、推进、状态、事件 |
+| `StoryGraphRegistry` | MonoBehaviour | 引导组件：Inspector 拖图/扫 Resources，自动注册章节跳转解析 |
+| `StoryView`（TMP） | MonoBehaviour | TMP 表现层：把 `Line/Choice/End` 渲染成对话框盒子 |
+| `DialogueBoxManager`（UI） | MonoBehaviour 单例 | 对话框样式注册、弹出/关闭、层级与池化管理 |
+| `VariableDebugView`（TMP） | MonoBehaviour | 把变量快照刷到一个 TMP 文本上（示例/调试） |
+| `StoryLineBoxView` / `StoryChoiceBoxView` / `StoryMessageBoxView`（TMP） | MonoBehaviour | 单条对白 / 选项列表 / 消息框的盒子视图（样式模板内实例化） |
+| `StoryFlowConfig` | 普通类（new） | 装配容器：六个接缝一次填好交给 `StoryFlow.Configure` |
+| `StoryConstants` | 静态类 | 内置常量、讲述者/变量解析、全局绑定、颜色解析 |
+| `StoryEventBus` | 普通类（new） | 事件总线：按名注册/派发事件 |
+| `InMemoryVariableProvider` | 普通类（new） | 内存变量（默认实现） |
+| `LocalizationTextProvider` | 普通类（new） | 单主表本地化提供者 |
+| `StoryGraphLocalizationProvider` | 普通类（new） | 图绑定本地化提供者（跳转章节自动切表） |
+| `ScriptableCharacterResolver` | 普通类（new） | 角色资产解析器（默认实现） |
+| `PlayerPrefsSaveStore` | 普通类（new） | PlayerPrefs 存档落地（默认实现） |
+| `StoryGraphCollection` | 普通类（new） | 图集合：`key → 图资产`，产出 `GraphResolver` |
+| `StoryAssetLocator` / `ResourcesStoryAssetLocator` | 静态类 / 普通类 | 资产加载定位器全局（Resources 默认） |
+| `IStoryVariableProvider` 等七条契约 | interface | 宿主实现后注入的接缝 |
+| `StoryGraphAsset` 等数据资产 | ScriptableObject | 策划在 Inspector 填的数据；宿主代码视为不透明句柄 |
+
+> 各组件页默认假设读者熟悉 MonoBehaviour 的继承成员（`gameObject` / `transform` / `GetComponent<T>` 等），
+> 不再逐页复述；页面仅标注「继承自」与「额外实现的接口」。
+
+---
+
+# 场景组件（Add Component 挂到 GameObject）
+
+## StoryFlow
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `MonoBehaviour` ·
+**Implemented in:** `com.microbialnet.story`
+Add Component 路径：`MicrobialNet/Story/Story Flow`（菜单 0 位）。
+
+### Description
+
+剧情系统的**对外门面与控制组件**。一个组件承担两件事：
+
+- **控制**：装配播放器、绑定视图，开播/暂停推进/选项/重播/存档；
+- **门面**：对外只暴露 `Configure` / `Play` / `Stop` / `Advance` / `Choose` / `Restart` 与一组 C# 事件，
+  内部藏起 `StoryPlayer`（internal）与一切底层数据模型——宿主永远不需要碰内部类型。
+
+进 Play 模式时 `Start` 会自动装配并播放（`autoStart=true`）；接入正式项目时由宿主调用
+`Configure(StoryFlowConfig)` 注入真实实现，剧情逻辑零改动。
+
+### Properties（Inspector 序列化字段，编辑器里配）
+
+> 下表为 **Inspector 可见**的序列化字段（组件挂到场景后在此配置）；运行时公共属性见下一节。
+
+| Property | 说明 |
+|---|---|
+| `autoStart`（bool，默认 true） | 进 Play 是否自动开始；关掉后由宿主在合适时机调 `Play()`。 |
+| `storyGraphAsset`（StoryGraphAsset） | 主剧情图资产；空则回退内置示例图（示例场景零资产可跑）。 |
+| `globalVariables`（StoryGlobalVariableAsset，可选） | 跨章节全局变量黑板；与本图变量黑板合并（本图优先）。 |
+| `autoSaveOnExit`（bool，默认 true） | 失焦/退出时自动 `SaveProgress`。 |
+| `autoLoadOnStart`（bool，默认 false） | 开播前若存在有效存档则从断点续玩。 |
+| `localizationTable`（StoryLocalizationTable，可选） | **兜底**本地化主表：仅当某张图没自带表时生效（优先用每图自带的表）。 |
+| `activeLanguage`（string，默认空） | 全局显示语言（`"zh-CN"`/`"en-US"`…）；空 = 用当前图表的 `defaultLanguage`。运行时等价于 `ActiveLanguage` 属性。 |
+
+### Properties（运行时公共属性）
+
+| Property | 类型 | 说明 |
+|---|---|---|
+| `IsRunning` | `bool { get; }` | 是否正在运行（已开始且未结束/未出错）。UI 判按钮态用。 |
+| `IsWaiting` | `bool { get; }` | 是否正等待用户推进（对白等 `Advance` / 选项等 `Choose`）。 |
+| `ActiveLanguage` | `string { get; set; }` | 全局显示语言，运行时随时可改；设置后立即对后续文本生效、切换章节不回落。设为 `null` 等价置空。 |
+
+### Public Methods
+
+| Method（完整签名） | 说明 |
+|---|---|
+| `void Configure(IStoryPresenter presenter)` | 显式注入视图（实现 `IStoryPresenter` 的组件，如 `StoryView`）。`Start` 也会按 `GetComponent<IStoryPresenter>()` 兜底。 |
+| `void Configure(StoryFlowConfig cfg)` | **统一装配入口**：一次性注入变量/事件/文本/角色/存档/图加载六个接缝。 |
+| `void Play()` | 开始/继续播放：未装配先装配再从入口播；已停止则重播（变量保持）；运行中幂等忽略。 |
+| `void Stop()` | 结束播放（对白/任意等待态均可调）。 |
+| `void Advance()` | 推进一句对白（收到 `OnLine` 后由视图/宿主调用）；非对白等待态调用被忽略。 |
+| `void Choose(string optionId)` | 选择选项（`optionId` 来自 `Choice.OptionId`）。 |
+| `void Choose(int index)` | 按最近一次 `OnChoices` 可见列表下标选；越界/不在选项态时忽略并告警。 |
+| `void Restart()` | 从入口重播：重置剧情遍历、清进度存档、清旧视图绑定；未注入宿主变量时变量回到初始值。 |
+| `void SaveProgress()` | 把当前进度经 `IStorySaveStore` 落地（默认 PlayerPrefs）。剧情已结束/未开始则清旧存档。 |
+| `void LoadProgress()` | 从存档读取并恢复进度（若存在有效存档）。 |
+| `string FormatVariables()` | 当前变量 `名字 = 值` 的只读调试字符串（`VariableDebugView` 每帧刷此值）。 |
+
+### Events（宿主订阅驱动自定义逻辑 / UI）
+
+| Event（签名） | 触发时机 |
+|---|---|
+| `event Action<StoryFlow.Line> OnLine` | 抛出一句对白（文本已本地化、讲述者已解析）。 |
+| `event Action<IReadOnlyList<StoryFlow.Choice>> OnChoices` | 抛出玩家可见选项列表。 |
+| `event Action<StoryFlow.StoryEventInfo> OnEvent` | 事件节点派发（调试/视图用）。 |
+| `event Action<string> OnNodeEnter` | 进入某节点（参数=节点 ID；编辑器高亮/调试）。 |
+| `event Action OnEnd` | 剧情结束（到达 End 节点或不可恢复错误后）。 |
+| `event Action<string> OnChapterChanged` | 章节/图切换（JumpChapter），参数=目标图标识（storyId，空则资产名）。 |
+| `event Action<string> OnError` | 死路/缺节点/异常结构；同时 `LogError`，不弹框。 |
+
+### Messages（MonoBehaviour 生命周期）
+
+| Message | 行为 |
+|---|---|
+| `Start()` | `autoStart` 为真 → 装配并开播；为假 → 仅确保装配（等宿主 `Play`）。 |
+| `OnDestroy()` | 解绑视图的 `OnAdvanceRequested/OnChoiceSelected`。 |
+| `OnApplicationPause(bool paused)` | `paused` 且 `autoSaveOnExit` → `SaveProgress()`。 |
+| `OnApplicationQuit()` | `autoSaveOnExit` → `SaveProgress()`。 |
+
+### 事件参数类型（嵌套类，字段即公共 API）
+
+**`StoryFlow.Line`**（一句对白）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `SpeakerId` | string | 讲述者 ID（数据标识，一般不显示）。 |
+| `SpeakerName` | string | 讲述者显示名（已含本地化）。 |
+| `Speaker` | `StoryConstants.CharacterViewModel` | 视图模型：显示名/主题色/立绘。 |
+| `Text` | string | 对白正文（已含本地化）。 |
+| `Speed` | float | 打字速度（字/秒，>0 有效）。 |
+| `TypingMode` | `TypingMode` | 打字机节奏模式。 |
+| `TypingDelays` | float[] | 手K逐字符延迟（秒）；仅 `Custom` 且长度匹配时用。 |
+| `PortraitKey` | string | 节点级立绘 Key。 |
+| `VoiceKey` | string | 节点级语音 Key（经事件 `voice:{key}` 派发）。 |
+| `appearance` | `DialogueAppearanceHint` | 节点级外观覆盖提示（样式/位置/策略/保留）。 |
+
+**`StoryFlow.Choice`**（一个选项）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `OptionId` | string | 选项 ID（对应端口 `opt_{OptionId}`），`Choose(string)` 用此值。 |
+| `Text` | string | 选项显示文本（已含本地化）。 |
+| `appearance` | `DialogueAppearanceHint` | 节点级外观覆盖提示。 |
+| `Prompt` | string | 选项框顶部说明文字（「带文字」选择节点的行内对白；空=不显示）。 |
+| `PromptSpeed` | float | Prompt 打字速度（默认 0.5）。 |
+| `PromptTypingMode` | `TypingMode` | Prompt 打字机模式（默认 GlobalSpeed）。 |
+
+> 视图语义：`Prompt` 非空时先打字揭示，**打完后选项才出现**；空 Prompt 选项立即出现。
+> 打字中点按 = 跳过打字立即出选项。
+
+**`StoryFlow.StoryEventInfo`**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Name` | string | 事件名（如 `confirm:battle_start`）。 |
+| `PayloadJson` | string | 事件负载（JSON 字符串）。 |
+
+### 示例（完整可编译组件）
+
+```csharp
+using MicrobialNet.Story;
+using UnityEngine;
+
+// 场景搭建：新建 GameObject 命名为 "Story"，Add Component 搜索 "Story Flow"，
+// 再挂上实现 IStoryPresenter 的视图（本包自带 "Story View (TMP)" 可选）。
+// 把一张已编辑好的 StoryGraphAsset（.asset）拖进 storyFlow.storyGraphAsset。
+public class StoryHost : MonoBehaviour
+{
+    private StoryFlow flow;
+
+    private void Awake()
+    {
+        flow = GetComponent<StoryFlow>();   // 与 Story Flow 组件同物体
+
+        // 方式 A（推荐）：订阅门面事件驱动自定义 UI / 业务
+        flow.OnLine += line => Debug.Log($"{line.SpeakerName}：{line.Text}");
+        flow.OnChoices += opts =>
+        {
+            for (int i = 0; i < opts.Count; i++)
+                Debug.Log($"  [{i}] {opts[i].Text}");   // 之后可调 flow.Choose(i) / Choose(optionId)
+        };
+        flow.OnEnd += () => Debug.Log("剧情结束");
+        flow.OnError += e => Debug.LogError(e);
+    }
+
+    private void Start()
+    {
+        // 装配真实系统（六个接缝；除 Variables 外均可留空用默认实现）。
+        // Variables 留空 = StoryFlow 自动用本图变量黑板 + Inspector 全局变量资产播种内存变量；
+        // 对接宿主存档/背包时在此换成自己的 IStoryVariableProvider。
+        var config = new StoryFlowConfig
+        {
+            Events = new StoryEventBus(),
+            Save   = new PlayerPrefsSaveStore("MyStory.Slot1"),
+        };
+        flow.Configure(config);
+        flow.Play();
+    }
+
+    private void Update()
+    {
+        if (flow.IsWaiting && Input.GetKeyDown(KeyCode.Space)) flow.Advance(); // 演示手动推进
+    }
+}
+```
+
+---
+
+## StoryGraphRegistry
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `MonoBehaviour` ·
+**Implemented in:** `com.microbialnet.story` · `[DefaultExecutionOrder(-100)]`
+Add Component 路径：`MicrobialNet/Story/Story Graph Registry`（菜单 10 位）。
+
+### Description
+
+**图注册引导组件**：解决「章节跳转解析器必须写代码注册」的繁琐。挂上本组件后只需在 Inspector
+**拖入若干剧情图资产**（或填一个 Resources 子目录自动扫描），它在 `Awake` 把「跳转标识 → 图」映射
+注册到 `StoryConstants.GraphResolver`，JumpChapter 节点即可解析目标图。宿主零代码接入，打包后同样生效。
+
+**key 约定**：每个图资产**同时以 storyId 和资产文件名**注册（命中任一即可），避免纠结结束节点该填哪个；
+可在 Inspector 关掉 `useStoryIdAsKey` 只用文件名。
+
+**执行时机**：`Awake` 注册（早于 `StoryFlow.Start` 读取）；`DefaultExecutionOrder(-100)` 确保早于其它 Start。
+
+**资产通道**：批量扫描经 `StoryAssetLocator`（`IStoryAssetLocator` 接缝）执行——宿主换成
+Addressables/热更适配器后，本组件与其它加载点一并切换，无需改代码。远程交付场景不依赖本组件扫描：
+应引导期预载图资产后用 `StoryGraphCollection` + `StoryConstants.BindGraphResolver` 自行装配。
+
+### Properties（Inspector 序列化字段）
+
+| Property | 说明 |
+|---|---|
+| `graphs`（StoryGraphAsset[]） | 显式注册：直接拖入的图资产列表。 |
+| `resourcesSubPath`（string，默认 `"Story/Graphs"`） | 批量注册：Resources 子目录（逻辑键路径，经资产定位器加载）；留空跳过。 |
+| `useStoryIdAsKey`（bool，默认 true） | 是否同时以 storyId 注册；关掉则仅资产文件名。 |
+
+### Public Methods
+
+无公共方法。全部行为在 `Awake` 完成（见 Messages）。
+
+### Messages（MonoBehaviour 生命周期）
+
+| Message | 行为 |
+|---|---|
+| `Awake()` | 遍历 `graphs` + 经定位器扫描 `resourcesSubPath` 下的全部图资产 → 逐个 `Add(文件名)`（+ storyId）→ 若总数>0 则 `StoryConstants.BindGraphResolver(collection.Resolver)`。 |
+
+### 示例
+
+```csharp
+using UnityEngine;
+
+// 场景搭建：新建空 GameObject，Add Component 搜 "Story Graph Registry"。
+// Inspector：把 chapter1/chapter2/… 若干图资产拖进 graphs；
+// 或把图资产放进 Assets/Resources/Story/Graphs/ 目录（resourcesSubPath 默认已指向它）。
+// 然后剧情图里 End 节点「结束类型=JumpChapter、跳转章节填 storyId 或资产名」即可跳转。
+public class GraphRegistryDemo : MonoBehaviour
+{
+    // 无需任何代码：本组件 Awake 已注册解析器。
+    // 仅当需要运行期动态注册时才手写：
+    //   StoryConstants.BindGraphResolver(key => LoadGraphByKey(key));
+}
+```
+
+---
+
+## StoryView（TMP 表现层，可选程序集）
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `MonoBehaviour` ·
+**Implements:** `IStoryPresenter` · **Implemented in:** `com.microbialnet.story.TMP`
+Add Component 路径：`MicrobialNet/Story/Story View (TMP)`（菜单 20 位）。
+依赖：TextMeshPro、`com.microbialnet.story.UI`（对话框管理器）。
+
+### Description
+
+剧情对话视图（TMP 实现）：把 `ShowLine / ShowChoices / ShowEnd` 翻译成对
+`DialogueBoxManager` 的弹出请求（样式 `story-line / story-choice / story-end`），并把玩家点击
+（继续/选项）经接口事件回传引擎。组件只做「翻译+路由」，呈现/层级/池化/多样式/生命周期全由
+`DialogueBoxManager` 负责。
+
+> `StoryView` 只是 `IStoryPresenter` 的**一种**实现。宿主可自实现该接口（UGUI/IMGUI/自绘），
+> 或传 `null` 做 headless。自定义实现见「IStoryPresenter 契约」。
+
+### Properties（Inspector 序列化字段 + 公共字段）
+
+> 下列为 public 字段，Inspector 与代码均可读写。
+
+| Property | 类型 | 说明 |
+|---|---|---|
+| `spawnMode` | `StoryViewSpawnMode` | 出现逻辑来源：`Config`（三个 position 字段）或 `Strategy`（生成策略资产，优先级最高）。 |
+| `linePosition` | `DialogueBoxPosition` | 对白框位置（默认底部居中）。 |
+| `choicePosition` | `DialogueBoxPosition` | 选项框位置（默认底部居中）。 |
+| `endPosition` | `DialogueBoxPosition` | 结束/提示框位置（默认底部居中）。 |
+| `defaultSpawnStrategy` | `DialogueBoxSpawnStrategyAsset` | 生成策略资产（仅 `spawnMode=Strategy` 生效）。 |
+| `lineStyleAsset` | `DialogueBoxStyleAsset` | 对白样式资产（空=内置默认 `story-line`）。 |
+| `choiceStyleAsset` | `DialogueBoxStyleAsset` | 选项样式资产（空=内置默认 `story-choice`）。 |
+| `endStyleAsset` | `DialogueBoxStyleAsset` | 结束框样式资产（空=内置默认 `story-end`）。 |
+| `typingProfile` | `DialogueTypingProfile` | 打字机标点节奏配置（仅「标点节奏」模式生效；空=内置默认标点倍率）。 |
+
+### Public Methods / Events（来自 IStoryPresenter）
+
+| Member（完整签名） | 说明 |
+|---|---|
+| `void ShowLine(StoryFlow.Line line)` | 渲染一句对白（应用节点级/全局样式、位置、打字机 schedule）。 |
+| `void ShowChoices(IReadOnlyList<StoryFlow.Choice> choices)` | 渲染选项框；有 `Prompt` 先打字揭示，打完才出按钮。 |
+| `void ShowEnd(bool showText, string text)` | `showText=false` 时忽略（自然结束不弹框）；否则按结束样式弹文本。 |
+| `event Action OnAdvanceRequested` | 玩家点击对白面板 → 触发（StoryFlow 转调 `Advance`）。 |
+| `event Action<string> OnChoiceSelected` | 玩家点击选项 → 触发（StoryFlow 转调 `Choose(optionId)`）。 |
+
+### Messages（MonoBehaviour 生命周期）
+
+| Message | 行为 |
+|---|---|
+| `Awake()` | `EnsureStyles()`：把三个样式资产字段注册进 `DialogueBoxManager`；未拖资产时按 key 经资产定位器回退 Prefab（`StoryDialogueBoxes/story-line` 等）→ 再回退内置代码模板。 |
+
+### 相关组件
+
+- 盒子视图组件：`StoryLineBoxView` / `StoryChoiceBoxView` / `StoryMessageBoxView` —— 见「对话框盒子视图」组件；
+- 底层管理器：`DialogueBoxManager`（UI 程序集单例）—— 见 DialogueBoxManager 模块页；
+- 代码模板构建：`StoryBoxTemplates`（TMP，静态）：`GameObject BuildLineTemplate()`、
+  `BuildChoiceTemplate()`、`BuildMessageTemplate(bool isError)` —— 找不到 Prefab 时回退的默认代码模板；
+- 字体解析：`StoryFontResolver.Resolve()`（TMP，静态）—— 解析当前 TMP 字体资产。
+
+### 示例（运行期换语言 + 切换出现模式）
+
+```csharp
+using MicrobialNet.Story;
+using UnityEngine;
+
+// 场景搭建：Story GameObject 上先挂 "Story Flow"，再 Add Component "Story View (TMP)"。
+// StoryFlow 启动时会自动 GetComponent<IStoryPresenter>() 找到它并接线。
+public class StoryViewRuntimeTweak : MonoBehaviour
+{
+    public StoryFlow flow;
+    public StoryView view;
+
+    public void SwitchLanguage(string lang)
+    {
+        flow.ActiveLanguage = lang;   // 实时生效，切换章节不回落
+    }
+
+    public void UseSpawnStrategyAsset()
+    {
+        view.spawnMode = StoryViewSpawnMode.Strategy;   // 之后对白/选项按策略资产决定出现位置
+    }
+}
+```
+
+## DialogueBoxManager（UI 程序集）
+
+**class in** `MicrobialNet.Story.UI` · **Inherits from:** `MonoBehaviour` · 单例。
+
+| Member（完整签名） | 说明 |
+|---|---|
+| `static DialogueBoxManager Instance { get; }` | 单例实例。 |
+| `static DialogueBoxManager Ensure()` | 惰性创建/获取单例（自动生成物体）。 |
+| `void RegisterStyle(string key, GameObject template, float intro = 0.2f, float outro = 0.2f, float retain = 0.8f)` | 注册一个代码/Prefab 对话框样式。 |
+| `void RegisterStyle(DialogueBoxStyleAsset asset)` | 按样式资产注册。 |
+| `bool HasStyle(string key)` | 样式是否存在。 |
+| `void RegisterSpawnStrategy(string styleKey, IDialogueBoxSpawnStrategy strategy)` | 绑定生成策略。 |
+| `IDialogueBoxSpawnStrategy GetSpawnStrategy(string key)` | 按 key 取生成策略。 |
+| `DialogueBoxHandle Show(DialogueBoxSpec spec)` | 弹出一个对话框（规格见 `DialogueBoxSpec`）。 |
+| `void RequestClose(DialogueBoxHandle handle, bool immediate)` | 请求关闭指定框。 |
+| `void CloseTop()` | 关闭最上层框。 |
+| `void CloseAll(bool immediate = true)` | 关闭全部框。 |
+| `void CloseByTag(string tag, bool immediate = false)` | 按 tag 关闭。 |
+| `int ActiveCount { get; }` | 当前活跃框数。 |
+
+---
+
+## VariableDebugView
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `MonoBehaviour` ·
+**RequireComponent:** `TextMeshProUGUI` · **Implemented in:** `com.microbialnet.story.TMP`
+Add Component 路径：`MicrobialNet/Story/Story Variable Debug`（菜单 30 位）。
+
+### Description
+
+运行时变量监视面板（示例/验证用）。剧情变量运行期活在 `IStoryVariableProvider`（纯 C#，Inspector 不可见），
+本组件把 `host.FormatVariables()` 的结果每帧刷到一个 TMP 文本上，让 Play 模式直观看到变量变化
+（如 `HP = 100 → 90`）。正式接入宿主时此组件可移除，由宿主 HUD/调试器接管。
+
+### Properties（Inspector 序列化字段）
+
+| Property | 说明 |
+|---|---|
+| `host`（StoryFlow，私有序列化） | 要监视的 StoryFlow；空则在 `Awake` 按 `GetComponentInParent<StoryFlow>()` 找。 |
+
+### Public Methods
+
+无公共方法。
+
+### Messages（MonoBehaviour 生命周期）
+
+| Message | 行为 |
+|---|---|
+| `Awake()` | 取 `TextMeshProUGUI`；host 为空则向上找父级 `StoryFlow`。 |
+| `Update()` | 每帧 `_text.text = host.FormatVariables()`。 |
+
+---
+
+## 对话框盒子视图：StoryLineBoxView / StoryChoiceBoxView / StoryMessageBoxView
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `MonoBehaviour` ·
+**Implements:** `IDialogueBoxView`（+ `IDialogueBoxRecyclable`；对白/选项盒另实现 `IPointerDownHandler`）·
+**Implemented in:** `com.microbialnet.story.TMP`
+
+### Description
+
+单个对话框的盒子视图组件（TMP），作为**样式模板的一部分**由 `DialogueBoxManager` 按需实例化，通常
+**不需要手动挂载/调用**。职责：
+
+- `StoryLineBoxView`：渲染一句对白（讲述者名 + 正文 + 打字机逐字揭示 + 立绘），点击盒子触发推进；
+- `StoryChoiceBoxView`：渲染选项列表（可带顶部 Prompt 打字机：文字打完后才生成按钮）；
+- `StoryMessageBoxView`：渲染标题 + 正文消息框（结束文本 `story-end` 用）。
+
+宿主若要自定义某类框的**外观布局**：复制默认 Prefab 模板（`MicrobialNet/Story/生成对话框模板 Prefab`），
+改结构但保留盒子视图组件与内部引用名，然后拖成 `DialogueBoxStyleAsset` 或放进
+`Resources/StoryDialogueBoxes/` 即可被 `StoryView` 回退加载。
+
+### Public Methods（来自 IDialogueBoxView / IDialogueBoxRecyclable，由生命周期驱动）
+
+| Member（完整签名） | 说明 |
+|---|---|
+| `void Setup(DialogueBoxHandle handle, object payload)` | 盒子弹出时由管理器调用；`payload` 为 `StoryView` 构造的内部载荷（含 `StoryFlow.Line/Choice` 等），宿主不直接构造。 |
+| `void OnRecycle()` | 盒子回收时由管理器调用：清空状态/引用，准备复用。 |
+| `void OnPointerDown(PointerEventData eventData)` | （对白/选择盒）点击交互：跳过打字或触发推进/选择事件。 |
+
+---
+
+# 服务组件（宿主 new / 直接使用）
+
+> 组件页并不限于 MonoBehaviour：宿主在装配 / 桥接层里 `new` 出来的服务对象，同样按组件页组织。
+> 本部分对应宿主在装配/桥接层里 `new` 出来的服务对象。
+
+## StoryFlowConfig
+
+**class in** `MicrobialNet.Story` · **Inherits from:** 无（sealed class）· **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+**统一装配容器**。六个接缝一次填好，交给 `StoryFlow.Configure(StoryFlowConfig)`（或内部 `new StoryPlayer`）后，
+剧情逻辑零改动接入真实系统。任何字段留空时框架提供合理默认（见每行「为空时」）。
+
+### Properties（public 字段，即装配项）
+
+| 字段 | 类型 | 为空时默认行为 |
+|---|---|---|
+| `Variables` | `IStoryVariableProvider` | 留空 = `StoryFlow` 自动用「本图变量黑板 + Inspector 全局变量资产」构造内存实现（`InMemoryVariableProvider`）；**对接宿主存档/背包时才必须提供**。 |
+| `Events` | `IStoryEventHandler` | 默认仅打印（`LambdaEventHandler`），不卡剧情。 |
+| `Text` | `IStoryTextProvider` | 默认透传原文（identity）；或自动构建图绑定 `StoryGraphLocalizationProvider`。 |
+| `Characters` | `IStoryCharacterResolver` | 运行时回退 `[未配置]` 占位符。 |
+| `Save` | `IStorySaveStore` | 默认 `PlayerPrefsSaveStore`（键 `MicrobialNet.Story.Progress`）。 |
+| `GraphResolver` | `Func<string, StoryGraphAsset>` | 为空时遇 JumpChapter 报明确错误（不崩溃）。 |
+
+```csharp
+// 用法见 StoryFlow 示例与各服务组件页；完整装配样例见文末附录。
+```
+
+---
+
+## StoryConstants
+
+**class in** `MicrobialNet.Story` · **Inherits from:** 无（static class）· **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+内置常量、讲述者/变量显示名解析、全局解析委托绑定与十六进制颜色解析。宿主桥接层常在此完成
+**两件全局注册**：`BindCharacterResolver`（运行时角色解析）与 `BindGraphResolver`（章节跳转解析）。
+
+### Properties（常量 / 静态字段 / 委托）
+
+| Property（完整签名） | 说明 |
+|---|---|
+| `const string NarrationId = "__narration__"` | 旁白讲述者 ID（无需角色资产）。 |
+| `const string UnknownId = "__unknown__"` | 未知讲述者 ID（显示 `???`）。 |
+| `const string SelfId = "__self__"` | 玩家自己讲述者 ID（显示「玩家自己」）。 |
+| `const string MissingPlaceholder = "[未配置]"` | 缺失展示名占位符（一眼可识别为配置错误）。 |
+| `static Func<string, CharacterViewModel> CharacterViewModelResolver` | 讲述者解析委托（Editor/宿主注入）。 |
+| `static Func<string, StoryGraphAsset> GraphResolver` | 图加载器静态委托（`StoryGraphRegistry` 引导注册处）。 |
+| `static Func<string, string> VariableNameResolver` | 变量名解析委托（Editor 注入，用于可读名）。 |
+
+### Nested Type：StoryConstants.CharacterViewModel
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `displayName` | string | 显示名。 |
+| `colorHex` | string | 主题色（如 `#378ADD`）。 |
+| `avatar` | Sprite | 立绘（可空；空则用色块占位）。 |
+| `isValid` | bool | 是否解析成功（false=未找到角色）。 |
+
+### Public Methods
+
+| Method（完整签名） | 说明 |
+|---|---|
+| `static bool IsBuiltInSpeaker(string id)` | 是否内置特殊讲述者（旁白/未知/玩家自己）。 |
+| `static void BindCharacterResolver(IStoryCharacterResolver resolver)` | 把运行时角色解析器绑定到全局委托；传 null 不改动。 |
+| `static void BindGraphResolver(Func<string, StoryGraphAsset> resolver)` | 绑定运行时图加载器全局委托；传 null 不改动。 |
+| `static CharacterViewModel ResolveCharacter(string id)` | 解析讲述者为视图模型：内置讲述者直接内建；否则走 `CharacterViewModelResolver`；解析不到回退 `[未配置]` 并告警一次。 |
+| `static string SpeakerDisplayName(string id)` | 讲述者 ID → 可读显示名（兼容旧调用）。 |
+| `static string VariableName(string id)` | 变量 ID → 可读名；未注册回退 `[未配置]` 并告警一次。 |
+| `static bool IsMissing(string displayName)` | 显示名是否为缺失占位符（视图可红色高亮）。 |
+| `static bool TryParseColor(string hex, out Color color)` | 解析 `#RRGGBB`/`#RRGGBBAA`；无效返回 false（color=white）。 |
+
+---
+
+## StoryEventBus
+
+**class in** `MicrobialNet.Story` · **Inherits from:** 无 · **Implements:** `IStoryEventHandler` ·
+**Implemented in:** `com.microbialnet.story`
+
+### Description
+
+`IStoryEventHandler` 的默认实现：按事件名注册单个处理器的**注册表**。业务侧细粒度、分散地注册自己
+关心的事件；剧情系统按需查表分发，不持有全量事件清单。挂起型事件未注册时**不卡死剧情**（直接调
+`onComplete`）。
+
+### Public Methods
+
+| Method（完整签名） | 说明 |
+|---|---|
+| `void Register(string eventName, Action<string, Action> handler)` | 注册事件（委托式，最方便）。参数空/处理器空抛异常。 |
+| `void Register(IStoryEvent e)` | 注册事件（类式：实现 `IStoryEvent`）。 |
+| `void Unregister(string eventName)` | 按名移除。 |
+| `bool Contains(string eventName)` | 是否已注册。 |
+| `void Raise(string eventName, string payloadJson, Action onComplete)` | 挂起型：查表调处理器；未注册直接 `onComplete`。 |
+| `void Raise(string eventName, string payloadJson)` | 瞬时型：派发即忘（忽略 onComplete 语义）。 |
+| `void AutoRegister(Assembly assembly)` | 扫描程序集内带 `[StoryEvent]` 且实现 `IStoryEvent` 的类并自动注册实例。 |
+
+```csharp
+var bus = new StoryEventBus();
+bus.Register(new BattleStartEvent());                       // 类式
+bus.Register("fx:shake", (json, done) => { CameraShake.Play(); done(); });
+```
+
+---
+
+## InMemoryVariableProvider
+
+**class in** `MicrobialNet.Story` · **Implements:** `IStoryVariableProvider` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+内存变量提供者（默认实现）：用剧情图变量定义（局部）+ 可选全局变量播种默认值，在内存维护一份快照。
+供独立验证/示例 Play；正式接入由宿主用真实存档包装 `IStoryVariableProvider` 替换。
+
+### Constructors
+
+| Constructor（完整签名） | 说明 |
+|---|---|
+| `InMemoryVariableProvider(IEnumerable<StoryVariableDef> localVariables, IEnumerable<StoryVariableDef> globalVariables = null)` | 局部定义必填；全局作为兜底（局部同名优先，不被覆盖）。 |
+
+### Public Methods（实现 IStoryVariableProvider）
+
+`bool HasVariable(string)` / `VariableType GetVariableType(string)` / `bool TryGetValue(string, out object)`
+/ `void SetValue(string, object)` / `IReadOnlyDictionary<string, object> Snapshot()`。
+行为：未知变量 `SetValue` 时按 String 自动创建。
+
+---
+
+## LocalizationTextProvider
+
+**class in** `MicrobialNet.Story` · **Implements:** `IStoryTextProvider` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+单主表本地化文本提供者：按 key（对话 `{nodeId}.text` / 选项 `{choiceId}.opt.{optionId}`）查 `StoryLocalizationTable`，
+命中当前语言译文返回；未命中返回 null → 播放器回退原文。语言**实时读取** `getLanguage()`（常为
+`() => flow.ActiveLanguage`），运行时改语言立即生效、切换章节不重置；`getLanguage` 为空串则回落表 `defaultLanguage`。
+
+### Constructors
+
+| Constructor（完整签名） | 说明 |
+|---|---|
+| `LocalizationTextProvider(StoryLocalizationTable table, System.Func<string> getLanguage)` | `table`=主表；`getLanguage`=语言获取委托（每次解析实时调用）。 |
+
+### Public Methods
+
+`string ResolveText(string key)` —— 实现 `IStoryTextProvider`。
+
+---
+
+## StoryGraphLocalizationProvider
+
+**class in** `MicrobialNet.Story` · **Implements:** `IStoryTextProvider` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+图绑定本地化文本提供者：持有「当前图」，每次 `ResolveText` 从当前图的 `StoryGraphAsset.localizationTable`
+取译文；当前图没设表则回落兜底表。**由 `StoryFlow` 在未注入自定义 Text 时自动构建并接管**：
+跳转章节时 `StoryFlow` 调用 `SetCurrentGraph(目标图)`，本地化表随图切换，新图文本不误查旧表。
+
+### Constructors
+
+| Constructor（完整签名） | 说明 |
+|---|---|
+| `StoryGraphLocalizationProvider(StoryGraphAsset initialGraph, System.Func<string> getLanguage, StoryLocalizationTable fallback)` | 初始图 + 语言委托 + 兜底表（可 null）。 |
+
+### Public Methods
+
+| Method（完整签名） | 说明 |
+|---|---|
+| `void SetCurrentGraph(StoryGraphAsset graph)` | 切换当前图（跳转章节时由 StoryFlow 调用）。 |
+| `string ResolveText(string key)` | 实现 `IStoryTextProvider`。 |
+
+---
+
+## ScriptableCharacterResolver
+
+**class in** `MicrobialNet.Story` · **Implements:** `IStoryCharacterResolver` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+基于角色资产（`StoryCharacterAsset`）的运行时角色解析器默认实现。适用于「角色资产随包发布」场景：
+宿主把可用角色资产列表注入即可（无需编辑器 AssetDatabase）；也提供 `FromResources` 兜底。
+解析不到返回 `default`（isValid=false），绝不回退裸 ID。
+
+### Constructors / 工厂
+
+| Constructor / Method | 说明 |
+|---|---|
+| `ScriptableCharacterResolver(IEnumerable<StoryCharacterAsset> assets)` | 显式资产列表构造（推荐）。 |
+| `static ScriptableCharacterResolver FromResources(string relativePath = "Story/Characters")` | 经 `StoryAssetLocator` 从逻辑键路径加载全部角色资产构造。 |
+
+### Public Methods
+
+`StoryConstants.CharacterViewModel Resolve(string characterId)` —— 实现 `IStoryCharacterResolver`。
+
+---
+
+## PlayerPrefsSaveStore
+
+**class in** `MicrobialNet.Story` · **Implements:** `IStorySaveStore` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+PlayerPrefs 存档落地默认实现（即插即用示例）。单槽语义：一个实例 = 一个槽（`key` 为 PlayerPrefs 键）。
+
+### Constructors
+
+| Constructor（完整签名） | 说明 |
+|---|---|
+| `PlayerPrefsSaveStore(string key = "StoryFlow.Progress")` | 指定该槽的 PlayerPrefs 键。 |
+
+### Public Methods（实现 IStorySaveStore）
+
+`void Save(string json)`（写 + `PlayerPrefs.Save()`）/ `string Load()` / `bool HasSave()` / `void Clear()`。
+
+---
+
+## StoryGraphCollection
+
+**class in** `MicrobialNet.Story` · **Inherits from:** 无 · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+运行时图集合：把若干 `StoryGraphAsset` 按「标识 → 图」注册进来，产出可直接赋给
+`StoryFlowConfig.GraphResolver` 的委托。不预设「章节→图」映射，完全交给装配决定
+（单个章节目录多张图、跨 storyId 跳转都能灵活注册）。
+
+### Public Methods / Properties
+
+| Member（完整签名） | 说明 |
+|---|---|
+| `void Add(string key, StoryGraphAsset asset)` | 注册一张图（key 建议用 storyId/章节名；空 key 或 null 资产忽略）。 |
+| `bool TryGet(string key, out StoryGraphAsset asset)` | 尝试按标识取图。 |
+| `StoryGraphAsset Resolve(string key)` | 按标识取图；找不到返回 null（→ JumpChapter 明确错误）。 |
+| `Func<string, StoryGraphAsset> Resolver { get; }` | 转委托，直接赋给 `StoryFlowConfig.GraphResolver`。 |
+| `int Count { get; }` | 已注册图数量。 |
+
+```csharp
+var graphs = new StoryGraphCollection();
+graphs.Add("chapter1", chapter1Asset);
+config.GraphResolver = graphs.Resolver;   // End 节点 jumpToChapter 填 "chapter1" 即可
+```
+
+---
+
+## StoryAssetLocator / ResourcesStoryAssetLocator / IStoryAssetLocator
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+剧情相关资产的**加载定位器接缝**（资产空间端口-适配器）。默认实现走 `UnityEngine.Resources`；
+宿主整体替换（Addressables / 远程热更适配器）即支持分包、按需下载与热更，运行时所有资产发现
+（对话框模板 / 样式 / 生成策略 / 图批量扫描 / 角色兜底）统一经此切换，无需改业务代码。
+
+**热更契约要点**（实现适配器须遵守）：`path` 是**逻辑键**（如 `"Story/Graphs/main"`，无扩展名），
+不是物理路径承诺；同步成员只服务本地/已就绪资产（远程适配器未就绪返回 null/空，**禁止阻塞**）；
+失败不抛异常（null/空数组）；资产生命周期归定位器所有（不提供 Release）；`Current` 引导期一次性设置。
+
+### Static Properties / Methods（StoryAssetLocator）
+
+| Member（完整签名） | 说明 |
+|---|---|
+| `static IStoryAssetLocator Current { get; set; }` | 当前定位器；赋 null 回落默认 Resources 实现。 |
+
+### Public Methods（IStoryAssetLocator，适配器须实现）
+
+| Method（完整签名） | 说明 |
+|---|---|
+| `T LoadAsset<T>(string path) where T : Object` | 按逻辑键同步加载单个资产；找不到返回 null，不抛异常。 |
+| `T[] LoadAllAssets<T>(string path) where T : Object` | 同步加载键空间下全部指定类型资产；无则空数组。 |
+| `Task<T> LoadAssetAsync<T>(string path) where T : Object` | 异步加载单个（本地实现=立即完成的同步包装）。 |
+| `Task<T[]> LoadAllAssetsAsync<T>(string path) where T : Object` | 异步批量加载。 |
+
+`ResourcesStoryAssetLocator`：上述四个成员的 Resources 实现（`Resources.Load<T>` / `Resources.LoadAll<T>`）。
+Addressables 映射口径见 `IStoryAssetLocator` 源码注释与 `Samples~/AddressablesAdapter`。
+
+---
+
+# 契约接口（宿主实现，注入后生效）
+
+> 本部分的接口是剧情系统留给宿主的「可插入槽位」：**实现接口 → 注入 `StoryFlowConfig` → 剧情逻辑零改动**接入真实系统。
+
+## IStoryVariableProvider
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+变量读写提供者。剧情系统不直接依赖宿主存档/背包/UI，所有变量读写（条件求值、赋值节点）一律经此接口注入。
+
+### Public Methods（宿主实现）
+
+| Method（完整签名） | 语义 |
+|---|---|
+| `bool HasVariable(string variableId)` | 变量是否已定义（含类型信息）。 |
+| `VariableType GetVariableType(string variableId)` | 取类型（条件比较/赋值解析做类型感知）。 |
+| `bool TryGetValue(string variableId, out object value)` | 读值；不存在返回 false 且 value=null。 |
+| `void SetValue(string variableId, object value)` | 写值（赋值节点调用）；不存在可由实现创建或忽略。 |
+| `IReadOnlyDictionary<string, object> Snapshot()` | 导出全量只读快照（供进度存档）。 |
+
+配套类型：`VariableType { Int, Float, Bool, String }`、`VariableScope { Local, Global }`、
+`StoryVariableDef { id, name, type, scope, defaultValue, description }`（详见「数据资产」部分）。
+
+```csharp
+// 宿主实现示例：对接自家存档系统
+public class HostVariableProvider : IStoryVariableProvider
+{
+    public bool HasVariable(string id) => SaveSystem.HasFlag(id);
+    public VariableType GetVariableType(string id) => SaveSystem.GetType(id);
+    public bool TryGetValue(string id, out object value) => SaveSystem.TryRead(id, out value);
+    public void SetValue(string id, object value) => SaveSystem.Write(id, value);
+    public IReadOnlyDictionary<string, object> Snapshot() => SaveSystem.Snapshot();
+}
+```
+
+## IStoryEventHandler + IStoryEvent + [StoryEvent]
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+事件节点派发时，剧情只认「事件名 + 参数 + 完成回调」，语义全在业务侧。`IStoryEventHandler` 是调用面
+（默认实现 `StoryEventBus`）；`IStoryEvent` 是单个业务事件的契约；`[StoryEvent("名")]` 特性供编辑器
+事件名下拉收集与 `AutoRegister` 自动发现。
+
+### Public Methods
+
+**`IStoryEventHandler`**
+
+| Method（完整签名） | 语义 |
+|---|---|
+| `void Raise(string eventName, string payloadJson, Action onComplete)` | **挂起型**（事件节点用）：剧情等 `onComplete` 才续走。 |
+| `void Raise(string eventName, string payloadJson)` | **瞬时型**（`voice:{key}` 等用）：派发即忘。 |
+
+**`IStoryEvent`**（单个事件实现）
+
+| Member | 签名 | 语义 |
+|---|---|---|
+| 事件名 | `string EventName { get; }` | 须与剧情图 `eventName` 完全一致。 |
+| 执行 | `void Execute(string payloadJson, Action onComplete)` | 做业务；**务必调 onComplete**，否则剧情永久挂起。 |
+
+**`StoryEventAttribute`**：`public StoryEventAttribute(string name)`，`string Name { get; }`。
+
+> ⚠️ `[StoryEvent]` 特性名与 `EventName` 属性必须一致，否则编辑器下拉名与总线注册 key 对不上，事件节点被跳过。
+
+```csharp
+[StoryEvent("confirm:battle_start")]
+public class BattleStartEvent : IStoryEvent
+{
+    public string EventName => "confirm:battle_start";
+    public void Execute(string payloadJson, Action onComplete)
+        => BattleSystem.Start(payloadJson, onComplete);   // 打完战斗即续走
+}
+// 注册：bus.Register(new BattleStartEvent());
+// 或整程序集：bus.AutoRegister(typeof(BattleStartEvent).Assembly);
+```
+
+## IStoryTextProvider
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+文本来源提供者（本地化接缝）。播放器抛出对白/选项前，按节点 ID 派生的 key 调用 `ResolveText`；
+命中返回译文，未命中（null/空）回退显示原文。key 规则：对话 `{nodeId}.text`、选项 `{choiceId}.opt.{optionId}`。
+
+### Public Methods（宿主实现）
+
+`string ResolveText(string key)` —— 传入的是 **key 不是原文**；返回 null/空 = 无译文（回退原文）。
+
+```csharp
+public class RemoteTextProvider : IStoryTextProvider
+{
+    public string ResolveText(string key) => TextService.Fetch(key); // 取不到返回 null
+}
+```
+
+## IStoryCharacterResolver
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+把 `characterId` 解析为显示模型（显示名 + 主题色 + 立绘）。角色资产必须以**运行时可达**方式提供
+（Resources / 显式列表 / Addressables），不能依赖编辑器 AssetDatabase。解析不到必须返回 `default`
+（`isValid=false`），**绝不能返回裸 ID**。
+
+### Public Methods（宿主实现）
+
+`StoryConstants.CharacterViewModel Resolve(string characterId)`（结构见「StoryConstants.CharacterViewModel」）。
+
+注入方式二选一：经 `StoryFlowConfig.Characters`（推荐）或 `StoryConstants.BindCharacterResolver(resolver)`。
+
+## IStorySaveStore
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+进度存档落地接缝。单槽语义：一个 `StoryFlowConfig` = 一个存档槽（一张图的断点续玩进度）；
+多槽由宿主持有多个实现实例。
+
+### Public Methods（宿主实现）
+
+| Method（完整签名） | 语义 |
+|---|---|
+| `void Save(string json)` | 写入（json 已由框架序列化好）。 |
+| `string Load()` | 读取；无存档返回 null/空串。 |
+| `bool HasSave()` | 是否存在有效存档。 |
+| `void Clear()` | 清除（剧情结束/失效时）。 |
+
+## IStoryPresenter
+
+**class in** `MicrobialNet.Story` · **Implemented in:** `com.microbialnet.story`
+
+### Description
+
+剧情表现层契约（Runtime 内定义，不依赖 TMP/UGUI）。引擎经此接口驱动「显示」并收集「用户输入」。
+TMP 版 `StoryView` 只是其中一种实现；宿主可自实现（UGUI/IMGUI/自绘），或传 null 做 headless。
+
+### Public Methods / Events（宿主实现）
+
+| Member（完整签名） | 语义 |
+|---|---|
+| `void ShowLine(StoryFlow.Line line)` | 渲染一句对白。 |
+| `void ShowChoices(IReadOnlyList<StoryFlow.Choice> choices)` | 渲染选项按钮。 |
+| `void ShowEnd(bool showText, string text)` | 到达 End；`showText=false` 时忽略（不弹框）。 |
+| `event Action OnAdvanceRequested` | 点击对白面板时触发（StoryFlow 转调 `Advance()`）。 |
+| `event Action<string> OnChoiceSelected` | 点击选项时触发（StoryFlow 转调 `Choose(optionId)`）。 |
+
+## IStoryAssetLocator（适配器实现）
+
+见 `StoryAssetLocator` 一节（该节已含完整接口方法与热更契约）。
+
+---
+
+# 数据资产（ScriptableObject，Inspector 填写）
+
+> 宿主代码把这些资产当作**不透明句柄**（`new` 出来、整对象引用、拖进 Registry/Collection），
+> 内部数据字段由策划/编辑器维护。以下只列「宿主/策划会接触到的字段与语义」。
+> 字段名以编辑器 Inspector 实际可见为准（部分为框架 internal，宿主代码不可读）。
+
+## StoryGraphAsset
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `ScriptableObject` · 创建：右键 `MicrobialNet/Story/剧情图`。
+
+一张剧情图（节点 + 连线 + 变量黑板 + 元信息）。宿主在 Inspector 拖给 `StoryFlow.storyGraphAsset` 或
+注册进 `StoryGraphRegistry` / `StoryGraphCollection`；也可在运行时用宿主自己的加载管线 `LoadAsset`。
+内部数据（meta/nodes/edges/variables/usedCharacterIds/localizationTable/groups/stickyNotes/
+inlinedTableRows 等）由编辑器维护，宿主代码不可直接读（internal）——需要读取 storyId/章节等请走
+**数据组件 API（编辑器工具）或让业务把标识放进跳转 key 语义**。
+
+## StoryCharacterAsset
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `ScriptableObject` · 创建：右键 `MicrobialNet/Story/角色`。
+
+| 字段（public） | 类型 | 说明 |
+|---|---|---|
+| `characterId` | string | 稳定 ID（讲述者引用它；改名不影响配置）。 |
+| `displayName` | string | 显示名。 |
+| `colorHex` | string（默认 `#378ADD`） | 主题色。 |
+| `avatar` | Sprite | 立绘（可空）。 |
+| `description` | string（TextArea） | 说明。 |
+
+供 `ScriptableCharacterResolver` / 编辑器角色库使用。
+
+## StoryGlobalVariableAsset + StoryVariableDef
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `ScriptableObject`
+
+`StoryGlobalVariableAsset`：跨章节全局变量黑板，字段 `variables`（`List<StoryVariableDef>`）。
+`StoryVariableDef`（Serializable）：
+
+| 字段（public） | 类型 | 说明 |
+|---|---|---|
+| `id` | string | 稳定 ID（节点引用它）。 |
+| `name` | string | 显示名。 |
+| `type` | `VariableType`（默认 Int） | Int / Float / Bool / String。 |
+| `scope` | `VariableScope`（默认 Local） | Local=单图有效；Global=跨图持久。 |
+| `defaultValue` | string | 字符串默认值（运行时按 type 解析）。 |
+| `description` | string | 说明（不参与执行）。 |
+
+## StoryLocalizationTable / StoryLocalizationAsset
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `ScriptableObject`
+
+- `StoryLocalizationTable`（本地化主表）：`defaultLanguage`（默认 `"zh-CN"`）、`languages`
+  （`List<string>`，默认 `zh-CN/en-US`）、`entries`（`List<Entry>`，`Entry { key, original, translations }`）。
+  提供查询：`int LangIndex(string lang)`、`bool TryGetTranslation(string key, string lang, out string text)`、
+  `string GetOriginal(string key)`、`bool ContainsKey(string key)`（均 public）。
+  经 `LocalizationTextProvider` / `StoryGraphLocalizationProvider` 使用。
+- `StoryLocalizationAsset`：本地化资产容器（含内部 Entry 表，供编辑器 CSV/Excel 导入导出）。
+
+## 样式 / 打字机 / 定位 / 生成策略资产
+
+**class in** `MicrobialNet.Story`（样式与定位）/ `MicrobialNet.Story.UI`（策略）
+
+| 资产 | 关键字段 / 成员 | 说明 |
+|---|---|---|
+| `DialogueBoxStyleAsset` | `styleKey`、`introDuration`、`outroDuration`、`retainRatio`（其余见资产 Inspector） | 对话框样式：模板 + 入场/退场时长 + 留存比例。创建：右键 `MicrobialNet/Story/对话框样式`。 |
+| `DialogueTypingProfile` | `rules`（`List<TypingPunctuationRule>`，`rule{ chars, multiplier }`）、`float MultiplierFor(char c)` | 打字机标点节奏。创建：右键 `MicrobialNet/Story/打字机标点节奏`。 |
+| `DialogueBoxPosition`（+ `DialogueBoxPositionMode`） | `BottomCenter()` 等工厂、锚点/偏移字段 | 屏幕九宫格 + 偏移定位。 |
+| `DialogueAppearanceHint`（非 SO，节点运行期数据） | `styleKeyOverride/styleAsset/overridePosition/position/spawnStrategyKey/persistentOverride` | 节点级外观覆盖提示（随 `Line/Choice.appearance` 透传）。 |
+| `DialogueBoxSpawnStrategyAsset`（abstract）+ 内置 `StaticSpawnStrategy`/`RandomRectSpawnStrategy`/`CascadeRandomSpawnStrategy` | 实现 `IDialogueBoxSpawnStrategy` | 对话框出现位置/时机策略。创建：右键 `MicrobialNet/Story/对话框策略`。 |
+
+## StoryTableAsset（剧情表）
+
+**class in** `MicrobialNet.Story` · **Inherits from:** `ScriptableObject`
+
+剧情表驱动节点引用的表格资产（行 `StoryTableRow` + 选项 `StoryTableChoice`，含表内默认语速/外观注入的
+行级配置）。由编辑器「剧情表」工具维护与导入；运行时经剧情表节点（`StoryTableNodeData`）展开为虚拟
+对话节点播放。宿主通常不需要直接读表结构。
+
+---
+
+## 附录：完整装配样例（宿主桥接层） {.appendix}
+
+```csharp
+using MicrobialNet.Story;
+using UnityEngine;
+
+// 场景搭建：Story GameObject 挂 "Story Flow"（+ 可选 "Story View (TMP)"）；
+// StoryGraphAsset / StoryCharacterAsset / StoryLocalizationTable 均为提前创建好的资产。
+public class StoryBridge : MonoBehaviour
+{
+    public StoryFlow flow;
+    public StoryGraphAsset chapter1, chapter2;            // 主图 + 跳转目标
+    public StoryCharacterAsset[] characters;              // 角色资产列表
+    public StoryLocalizationTable localizationTable;      // 主表（每图自带表时可不传）
+
+    private void Start()
+    {
+        var bus = new StoryEventBus();
+        bus.Register(new BattleStartEvent());             // 注册单个事件
+
+        var graphs = new StoryGraphCollection();          // 章节跳转图集合
+        graphs.Add("chapter1", chapter1);
+        graphs.Add("chapter2", chapter2);
+
+        var config = new StoryFlowConfig
+        {
+            // Variables 留空 → StoryFlow 自动用本图变量黑板 + Inspector 全局变量播种内存变量；
+            // 对接宿主存档/背包时换成自己的 IStoryVariableProvider。
+            Events     = bus,
+            Text       = new LocalizationTextProvider(localizationTable, () => flow.ActiveLanguage),
+            Characters = new ScriptableCharacterResolver(characters),
+            Save       = new PlayerPrefsSaveStore("Main.Slot1"),
+            GraphResolver = graphs.Resolver,
+        };
+        flow.Configure(config);
+        flow.Play();
+    }
+}
+```
+
+### 宿主可用组件速查
+
+| 想做的事 | 组件页 | 入口 |
+|---|---|---|
+| 装配一切、开播 | `StoryFlow` + `StoryFlowConfig` | `flow.Configure(cfg); flow.Play();` |
+| 章节跳转解析（拖即用） | `StoryGraphRegistry` | 挂组件拖图资产 |
+| 章节跳转解析（代码） | `StoryGraphCollection` | `graphs.Add(key, asset)` → `cfg.GraphResolver` |
+| 事件注册 | `StoryEventBus` + `IStoryEvent` | `bus.Register(...)` |
+| 变量读写 | `IStoryVariableProvider` | 实现注入 |
+| 文本本地化 | `IStoryTextProvider` + 两个文本 Provider | 实现/注入或自动构建 |
+| 角色解析 | `IStoryCharacterResolver` | 实现注入 |
+| 存档 | `IStorySaveStore` | 实现注入 |
+| 自定义 UI | `IStoryPresenter` | 实现注入/同物体 GetComponent |
+| 资产通道热更 | `IStoryAssetLocator` | 换 `StoryAssetLocator.Current` |
+| 运行时控制 | `flow.Play/Stop/Advance/Choose/Restart` | UI 按钮回调 |
+
+### 宿主不可见（internal，勿引用）
+
+`StoryPlayer`、`RuntimeStoryGraph`、`TypingScheduler`、`ConditionEvaluator`、`ValueParser`、
+`StoryMeta`、节点数据类（`StoryNodeData` 子类）内部成员等。只对同包 `Editor / TMP / Tests` 经
+`InternalsVisibleTo` 开放。宿主一切需求均能经上文各组件页的公共成员满足；若有遗漏，说明该能力
+应落在编辑器侧或内部实现，而不是宿主代码。

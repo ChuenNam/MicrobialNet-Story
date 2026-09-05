@@ -1,0 +1,138 @@
+/* =============================================================================
+ * FieldDrawer.uss — 属性面板字段绘制器（02 §4.1 / §4.2）
+ * 反射式自动生成面板的样式全部收口于此；少数控件（TextField 内部 TextInput
+ * 等）仍需 ForceShrink 在运行时逐层清零 minWidth，结构不变。
+ * 颜色多为「内嵌暗框」语义，跨明暗主题保持一致，故此处硬编码。
+ * ========================================================================== */
+
+/* 字段根容器 */
+.fd-fields { flex-grow: 1; min-width: 0; }
+
+/* 列表字段分组容器 + 标题 */
+.fd-group { flex-grow: 1; min-width: 0; }
+/* 分组标题（= 每一类序列化的开始）：顶部留白 ≈ 两行空行，拉开各类间距 */
+.fd-group-label {
+    -unity-font-style: bold;
+    margin-top: 16px;
+    margin-bottom: 2px;
+}
+
+/* 选项 / 子句 折叠 */
+.fd-fold {
+    flex-grow: 1;
+    min-width: 0;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+/* 选项 / 子句 之间的分隔线 */
+.fd-sep {
+    height: 1px;
+    margin-top: 10px;
+    margin-bottom: 2px;
+    background-color: rgb(102, 102, 102);
+}
+
+/* 嵌套列表元素内嵌框 */
+.fd-item {
+    flex-grow: 1;
+    min-width: 0;
+    margin-top: 6px;
+    margin-bottom: 2px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-color: rgb(89, 89, 89);
+    background-color: rgba(64, 64, 64, 0.30);
+}
+.fd-item-label {
+    font-size: 11px;
+    color: rgb(128, 128, 128);
+}
+
+/* 删除按钮 */
+.fd-del-btn { margin-top: 4px; }
+
+/* 多选混合态：统一应用按钮（把全部选中节点设成某值 / 清空） */
+.fd-apply-btn {
+    margin-top: 4px;
+    background-color: rgba(214, 158, 46, 0.18);
+}
+
+/* 字段行：标签 + 控件 */
+.fd-row { flex-direction: row; flex-grow: 1; min-width: 0; }
+.fd-label { width: 100px; flex-shrink: 0; padding-left: 18px; -unity-text-align: middle-left; }
+
+/* 控件占位（配合 ForceShrink 逐层收缩进面板） */
+.fd-control { flex-grow: 1; }
+.fd-ctrl-grow { flex-grow: 1; }
+.fd-flex-item { flex-shrink: 1; min-width: 0; }
+
+/* 打字机「手K时序」行内、下拉右侧的「时间轴」按钮：不拉伸、固定自身宽度、与下拉左间隔 */
+.fd-timeline-btn { flex-shrink: 0; flex-grow: 0; margin-left: 6px; }
+
+/* 缩小标签最小宽度，并移除多余的右边距 */
+.fd-control .unity-property-field__label {
+    min-width: 90px;       /* 根据你的实际需要调整 */
+    margin-right: 4px;     /* 原默认值通常较大，改成 4px 或 0 */
+}
+
+/* 多选：混合值行（部分选中节点该字段值不同），参照 Unity 多选组件的高亮语义 */
+.fd-row-mixed {
+    border-left: 3px solid rgb(214, 158, 46);
+    padding-left: 5px;
+    background-color: rgba(214, 158, 46, 0.10);
+}
+
+/* 多选：列表类字段（选项/条件）在各节点间独立，不做批量编辑，仅只读汇总 */
+.fd-row-readonly { opacity: 0.85; }
+.fd-summary {
+    flex-grow: 1;
+    color: rgb(150, 150, 150);
+    font-size: 11px;
+}
+
+/* 表格驱动节点徽标（Phase 3）：顶部高亮提示「本节点由剧情表驱动」 */
+.fd-table-bound {
+    flex-grow: 1;
+    margin-top: 4px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    background-color: rgba(56, 138, 221, 0.18);
+    border-left: 3px solid rgb(56, 138, 221);
+}
+.fd-table-bound-title {
+    -unity-font-style: bold;
+    color: rgb(120, 180, 240);
+}
+.fd-table-bound-hint {
+    font-size: 11px;
+    color: rgb(150, 170, 200);
+}
+.fd-table-bound-btns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+.fd-table-bound-btns > Button { margin-right: 6px; margin-bottom: 4px; }
+.fd-create-btn {
+    margin-top: 4px;
+    background-color: rgba(110, 170, 90, 0.20);
+}
+/* 未同步指示：SO 有改动尚未写回 Excel 时显示（醒目橙红，提示用户需点「同步到 Excel」） */
+.fd-unsynced {
+    margin-top: 4px;
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: rgb(240, 120, 70);
+}

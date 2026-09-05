@@ -1,0 +1,166 @@
+/* =============================================================================
+ * StoryPlaybackWindow.uss — 编辑器内试跑窗口（02 §4.1）
+ * 试跑窗口统一为「深色控制台」观感；--pb-* 局部变量只在 .pb-root 定义一次，
+ * 子元素以 var(--pb-*) 引用，便于微调而不动 C#。
+ * 下沉框（.pb-inset）底色/边框引用主题层变量 --c-inset-*，随明暗主题自适应。
+ * ========================================================================== */
+
+.pb-root {
+    flex-direction: column;
+    --pb-accent:  rgb(102, 204, 255);
+    --pb-dark-1:  rgba(13, 22, 33, 1);
+    --pb-dark-2:  rgba(41, 43, 51, 1);
+    --pb-divider: rgba(128, 128, 128, 0.18);
+}
+
+/* 顶部状态条（固定高度，不被挤压） */
+.pb-header {
+    -unity-font-style: bold;
+    font-size: 13px;
+    padding-left: 8px;
+    padding-top: 6px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+
+/* 当前节点舞台卡片 */
+.pb-stage {
+    margin-left: 8px;
+    margin-right: 8px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+    flex-grow: 1;
+    min-height: 120px;
+}
+
+/* 舞台标题栏（深色，与下方叙事区底板区分） */
+.pb-stage-header {
+    background-color: var(--pb-dark-1);
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+.pb-stage-type {
+    font-size: 10px;
+    color: var(--pb-accent);
+    -unity-font-style: bold;
+    padding-bottom: 1px;
+}
+.pb-stage-title {
+    font-size: 13px;
+    color: white;
+    -unity-font-style: bold;
+    padding-bottom: 2px;
+}
+
+/* 叙事 / 变量 / 历史 下沉框（底色/边框随主题自适应） */
+.pb-inset {
+    background-color: var(--c-inset-bg);
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-color: var(--c-inset-border);
+}
+.pb-stage-body {
+    flex-grow: 1;
+    margin-top: 4px;
+    justify-content: flex-start;
+}
+.pb-var-pane {
+    max-height: 140px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+.pb-history-pane {
+    flex-grow: 1;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+/* 滑动区内容容器：撑满并从上往下排列（用于 stage-body / history contentContainer） */
+.pb-history-content {
+    flex-grow: 1;
+    justify-content: flex-start;
+}
+
+/* 子栏目标题（深色背景条，与内容区区分） */
+.pb-section-title {
+    -unity-font-style: bold;
+    font-size: 11px;
+    color: rgb(235, 235, 242);
+    background-color: var(--pb-dark-2);
+    padding-left: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    margin-top: 6px;
+    margin-left: 8px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* 控制按钮行（固定高度） */
+.pb-btn-row {
+    flex-direction: row;
+    padding-left: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-shrink: 0;
+}
+
+/* 底部状态文字 */
+.pb-status {
+    color: rgb(128, 128, 128);
+    font-size: 10px;
+    padding-left: 8px;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+}
+
+/* 变量监视行 */
+.pb-var-line { font-size: 11px; }
+
+/* 叙事日志条目（透明度按「是否当前帧」动态设置，保留内联） */
+.pb-entry {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--pb-divider);
+}
+.pb-entry-type {
+    flex-direction: row;
+    padding-bottom: 2px;
+}
+.pb-entry-body { padding-left: 14px; }
+
+/* 当前帧高亮（青）/ 历史帧（灰） */
+.pb-accent {
+    color: var(--pb-accent);
+    -unity-font-style: bold;
+}
+.pb-muted { color: rgb(128, 128, 128); }
+
+/* 路径历史行 */
+.pb-history-row {
+    flex-direction: row;
+    padding-top: 1px;
+    padding-bottom: 1px;
+}
+
+/* 对话叙事 */
+.pb-speaker {
+    font-size: 11px;
+    color: var(--pb-accent);
+    padding-bottom: 1px;
+}
+.pb-dialogue-text {
+    font-size: 14px;
+    white-space: normal;
+}
+.pb-choice-label { font-size: 12px; }
+.pb-effect-line {
+    font-size: 11px;
+    color: rgb(128, 128, 128);
+    padding-top: 1px;
+}

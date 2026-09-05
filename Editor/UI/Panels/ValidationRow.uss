@@ -1,0 +1,10 @@
+/* ValidationRow.uss — 校验结果行（02 §4.1 / G7） */
+
+.validation-row {
+    border-bottom-width: 1px;
+    border-bottom-color: var(--c-divider);
+}
+
+.validation-error-text { color: var(--c-val-error-text); }
+.validation-warning-text { color: var(--c-val-warning-text); }
+.validation-ok { color: var(--c-val-ok); }

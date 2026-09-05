@@ -1,0 +1,30 @@
+/* StoryGroupView.uss — 分组框（02 §4.1 / 嵌套分组） */
+
+.story-group {
+    position: absolute;
+    border-width: 1px;
+    border-color: var(--c-group-border);
+    background-color: var(--c-group-bg);
+}
+
+.group-header {
+    height: 22px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    background-color: var(--c-group-header-bg);
+    color: white;
+    width: 100%;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 0;
+    border-color: var(--c-group-border);
+}
+
+.group-title {
+    font-size: 11px;
+    -unity-text-align: middle-left;
+}
+
+/* .group-body 仅作点击穿透容器，无视觉样式。 */

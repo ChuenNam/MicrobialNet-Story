@@ -1,0 +1,21 @@
+{
+    "name": "com.microbialnet.story.Editor",
+    "rootNamespace": "MicrobialNet.Story.EditorTools",
+    "references": [
+        "com.microbialnet.story",
+        "com.microbialnet.story.UI",
+        "com.microbialnet.story.TMP",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

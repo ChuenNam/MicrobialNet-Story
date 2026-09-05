@@ -1,0 +1,81 @@
+/* =============================================================================
+ * StoryEditorTheme.uss — 主题令牌（02 §4.1「主题层」）
+ * 所有颜色只在「此处」以 CSS 变量定义一次；其余 .uss 文件引用 var(--x)。
+ * 换配色只需改本文件，不改任何 C#（满足「换配色不改 C#」）。
+ * Light 为默认（.theme-light），Dark 通过 .theme-dark 覆盖。窗口根元素按
+ * EditorGUIUtility.isProSkin 被加上其一（见 StoryStyle.cs）。
+ * ========================================================================== */
+
+.theme-light {
+    --c-group-border:    rgb(115, 153, 217);
+    --c-group-header-bg: rgba(56, 71, 102, 0.95);
+    --c-group-bg:        rgba(115, 153, 217, 0.06);
+
+    --c-val-error:       rgb(217, 20, 20);
+    --c-val-warning:     rgb(217, 148, 0);
+    --c-val-error-text:  rgb(209, 31, 31);
+    --c-val-warning-text:rgb(224, 158, 0);
+    --c-val-ok:          rgb(40, 140, 40);
+
+    --c-playback:        rgb(40, 110, 210);
+    --c-flow:            rgb(0, 170, 220);
+
+    --c-divider:         rgb(179, 179, 179);
+    --c-panel-border:    rgb(179, 179, 179);
+    --c-inset-bg:        rgba(0, 0, 0, 0.06);
+    --c-inset-border:    rgba(0, 0, 0, 0.25);
+    --c-tab-selected:    rgb(214, 214, 214);
+
+    /* 变量类型调色板（原 VarTypeColor 写死 RGB，现抽到此处；换配色改本文件即可） */
+    --c-var-int:     rgb(56, 138, 219);
+    --c-var-float:   rgb(77, 178, 102);
+    --c-var-bool:    rgb(217, 140, 51);
+    --c-var-string:  rgb(179, 102, 191);
+
+    /* 节点类型色（原 [StoryNode] ColorHex 写死，现按节点类型名抽到此处） */
+    --c-node-start:       rgb(99, 153, 34);
+    --c-node-end:         rgb(163, 45, 45);
+    --c-node-choice:      rgb(239, 159, 39);
+    --c-node-dialogue:    rgb(55, 138, 221);
+    --c-node-event:       rgb(136, 135, 128);
+    --c-node-setvariable: rgb(29, 158, 117);
+    --c-node-condition:   rgb(127, 119, 221);
+    --c-node-comment:     rgb(136, 135, 128);
+}
+
+.theme-dark {
+    --c-group-border:    rgb(115, 153, 217);
+    --c-group-header-bg: rgba(56, 71, 102, 0.95);
+    --c-group-bg:        rgba(115, 153, 217, 0.06);
+
+    --c-val-error:       rgb(217, 51, 51);
+    --c-val-warning:     rgb(242, 191, 38);
+    --c-val-error-text:  rgb(230, 89, 89);
+    --c-val-warning-text:rgb(242, 199, 64);
+    --c-val-ok:          rgb(102, 204, 102);
+
+    --c-playback:        rgb(64, 140, 242);
+    --c-flow:            rgb(51, 217, 255);
+
+    --c-divider:         rgb(51, 51, 51);
+    --c-panel-border:    rgb(77, 77, 77);
+    --c-inset-bg:        rgba(0, 0, 0, 0.22);
+    --c-inset-border:    rgba(0, 0, 0, 0.55);
+    --c-tab-selected:    rgb(64, 64, 64);
+
+    /* 变量类型调色板（同 Light，可按需为 Dark 调亮对比度） */
+    --c-var-int:     rgb(56, 138, 219);
+    --c-var-float:   rgb(77, 178, 102);
+    --c-var-bool:    rgb(217, 140, 51);
+    --c-var-string:  rgb(179, 102, 191);
+
+    /* 节点类型色（同 Light） */
+    --c-node-start:       rgb(99, 153, 34);
+    --c-node-end:         rgb(163, 45, 45);
+    --c-node-choice:      rgb(239, 159, 39);
+    --c-node-dialogue:    rgb(55, 138, 221);
+    --c-node-event:       rgb(136, 135, 128);
+    --c-node-setvariable: rgb(29, 158, 117);
+    --c-node-condition:   rgb(127, 119, 221);
+    --c-node-comment:     rgb(136, 135, 128);
+}

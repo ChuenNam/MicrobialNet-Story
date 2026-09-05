@@ -1,0 +1,51 @@
+/* StoryNodeView.uss — 节点通用样式与状态叠加（02 §4.1 / §二） */
+
+.story-node-summary {
+    white-space: normal;
+    font-size: 11px;
+}
+
+/* ── 节点类型色（已改用 C# 内联兜底，见 StoryNodeView.NodeTypeColors）──
+   GraphView 节点的标题/边框被引擎内置 USS 以高优先级锁死，用户 USS（即便 !important）无法稳定
+   覆盖，故 StoryNodeView 构造函数改用内联样式直接给 .titleContainer 上色。
+   下方规则保留仅作文档/未来恢复 USS 路线时参考，运行时实际以 C# 内联色为准。 */
+.sgw-node-main.sgw-node-start       { border-top-color: var(--c-node-start) !important; }
+.sgw-node-title.sgw-node-start       { background-color: var(--c-node-start) !important; }
+.sgw-node-main.sgw-node-end         { border-top-color: var(--c-node-end) !important; }
+.sgw-node-title.sgw-node-end         { background-color: var(--c-node-end) !important; }
+.sgw-node-main.sgw-node-choice      { border-top-color: var(--c-node-choice) !important; }
+.sgw-node-title.sgw-node-choice      { background-color: var(--c-node-choice) !important; }
+.sgw-node-main.sgw-node-dialogue    { border-top-color: var(--c-node-dialogue) !important; }
+.sgw-node-title.sgw-node-dialogue    { background-color: var(--c-node-dialogue) !important; }
+.sgw-node-main.sgw-node-event       { border-top-color: var(--c-node-event) !important; }
+.sgw-node-title.sgw-node-event       { background-color: var(--c-node-event) !important; }
+.sgw-node-main.sgw-node-setvariable { border-top-color: var(--c-node-setvariable) !important; }
+.sgw-node-title.sgw-node-setvariable { background-color: var(--c-node-setvariable) !important; }
+.sgw-node-main.sgw-node-condition   { border-top-color: var(--c-node-condition) !important; }
+.sgw-node-title.sgw-node-condition   { background-color: var(--c-node-condition) !important; }
+.sgw-node-main.sgw-node-comment     { border-top-color: var(--c-node-comment) !important; }
+.sgw-node-title.sgw-node-comment     { background-color: var(--c-node-comment) !important; }
+
+/* 节点标题文字的加粗/白色已由 StoryNodeView 用 C# 内联样式兜底（GraphView 引擎 USS 锁死，
+   用户 USS 含 !important 仍无法稳定覆盖，故走内联，见 NodeTypeColors 段注释）。 */
+/* 非可执行节点（如 Comment）视觉弱化 */
+.comment-node { opacity: 0.85; }
+
+/* 校验高亮：左侧边框红(错误)/黄(警告)。由 MarkValidation 加对应类。 */
+.node-invalid-error {
+    border-left-width: 4px;
+    border-left-color: var(--c-val-error);
+}
+.node-invalid-warning {
+    border-left-width: 4px;
+    border-left-color: var(--c-val-warning);
+}
+
+/* 试跑高亮：右侧蓝色边框。由 MarkPlayback 加类。 */
+.node-playback {
+    border-right-width: 4px;
+    border-right-color: var(--c-playback);
+}
+
+/* 不可达节点整体 50% 透明（SetUnreachable 切换类）。 */
+.node-unreachable { opacity: 0.5; }
